@@ -2,7 +2,7 @@
 
 > An infinite, procedurally generated dungeon crawler built from scratch with Python & Pygame.
 
-![Game Banner or Screenshot Here](assets/image.png)
+![Game Banner or Screenshot Here](image.png)
 *(Note: Replace this line with a link to a screenshot of your game!)*
 
 ## 📜 The Story

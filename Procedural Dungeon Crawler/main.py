@@ -2,7 +2,6 @@ import pygame
 import sys
 import math
 import random
-import dungeon_gen
 
 # --- 1. SETUP & CONSTANTS ---
 pygame.init()
@@ -12,17 +11,21 @@ SCREEN_WIDTH, SCREEN_HEIGHT = 800, 600
 TILE_SIZE = 32
 FPS = 60
 
+# Map Constants (Formerly in dungeon_gen.py)
+WALL = "#"
+FLOOR = "."
+
 # Colors
 BLACK = (0, 0, 0)
-FLOOR_COLOR = (25, 25, 35)      # Darker floor for atmosphere
+FLOOR_COLOR = (25, 25, 35)      
 WALL_COLOR = (80, 80, 100)
 PLAYER_COLOR = (50, 200, 50)
 ENEMY_COLOR = (200, 50, 50)
 FIREBALL_COLOR = (255, 100, 0)
 SWORD_COLOR = (255, 255, 255)
-STAIRS_COLOR = (255, 215, 0)    # Gold
-POTION_COLOR = (255, 50, 50)    # Red potion
-PARTICLE_COLOR = (180, 20, 20)  # Blood red
+STAIRS_COLOR = (255, 215, 0)    
+POTION_COLOR = (255, 50, 50)    
+PARTICLE_COLOR = (180, 20, 20)  
 
 # UI Colors
 UI_BG_COLOR = (50, 50, 50)
@@ -36,7 +39,29 @@ clock = pygame.time.Clock()
 font = pygame.font.SysFont('Arial', 20, bold=True)
 big_font = pygame.font.SysFont('Arial', 60, bold=True)
 
-# --- 2. ASSETS ---
+# --- 2. MAP GENERATOR FUNCTION (Moved here!) ---
+def generate_dungeon(width=50, height=50):
+    # 1. Fill map with walls
+    game_map = [[WALL for _ in range(width)] for _ in range(height)]
+    
+    # 2. Drunkard's Walk Settings
+    max_steps = 800  # How much floor to dig
+    x, y = width // 2, height // 2 # Start in middle
+    
+    # 3. Start walking
+    for _ in range(max_steps):
+        game_map[y][x] = FLOOR # Dig a floor here
+        
+        # Pick random direction
+        direction = random.choice(['N', 'S', 'E', 'W'])
+        if direction == 'N' and y > 1: y -= 1
+        elif direction == 'S' and y < height - 2: y += 1
+        elif direction == 'E' and x < width - 2: x += 1
+        elif direction == 'W' and x > 1: x -= 1
+            
+    return game_map
+
+# --- 3. ASSETS ---
 assets = {}
 
 def load_image(name, filename, color_fallback, shape="rect"):
@@ -48,13 +73,12 @@ def load_image(name, filename, color_fallback, shape="rect"):
         surf = pygame.Surface((TILE_SIZE, TILE_SIZE), pygame.SRCALPHA)
         if shape == "circle":
             pygame.draw.circle(surf, color_fallback, (TILE_SIZE//2, TILE_SIZE//2), TILE_SIZE//2)
-        elif shape == "triangle": # For stairs
+        elif shape == "triangle": 
              pygame.draw.polygon(surf, color_fallback, [(TILE_SIZE//2, 0), (0, TILE_SIZE), (TILE_SIZE, TILE_SIZE)])
         else:
             surf.fill(color_fallback)
         assets[name] = surf
 
-# Load assets (with shapes for clarity if images missing)
 load_image("floor", "floor.png", FLOOR_COLOR)
 load_image("wall", "wall.png", WALL_COLOR)
 load_image("player", "player.png", PLAYER_COLOR)
@@ -63,26 +87,24 @@ load_image("fireball", "fireball.png", FIREBALL_COLOR, shape="circle")
 load_image("stairs", "stairs.png", STAIRS_COLOR, shape="triangle")
 load_image("potion", "potion.png", POTION_COLOR, shape="circle")
 
-# --- 3. CLASSES ---
+# --- 4. CLASSES ---
 
 class Particle:
-    """Visual effect for blood splatter"""
     def __init__(self, x, y):
         self.x = x
         self.y = y
-        self.dx = random.uniform(-3, 3) # Random direction
+        self.dx = random.uniform(-3, 3) 
         self.dy = random.uniform(-3, 3)
-        self.life = random.randint(10, 20) # Frames to live
+        self.life = random.randint(10, 20) 
         self.size = random.randint(2, 5)
 
     def update(self):
         self.x += self.dx
         self.y += self.dy
         self.life -= 1
-        self.size = max(0, self.size - 0.1) # Shrink
+        self.size = max(0, self.size - 0.1) 
 
 class Item:
-    """Potions on the ground"""
     def __init__(self, x, y, item_type="potion"):
         self.rect = pygame.Rect(x, y, TILE_SIZE, TILE_SIZE)
         self.type = item_type
@@ -90,7 +112,6 @@ class Item:
         self.bob_offset = 0
 
     def update(self):
-        # Bobbing animation
         self.bob_offset += 0.1
         self.rect.y += math.sin(self.bob_offset) * 0.5
 
@@ -117,9 +138,8 @@ class Projectile:
 class Enemy:
     def __init__(self, x, y, level):
         self.rect = pygame.Rect(x, y, TILE_SIZE, TILE_SIZE)
-        self.speed = random.uniform(1.5, 2.5) # Random speeds
+        self.speed = random.uniform(1.5, 2.5) 
         self.image = assets["enemy"]
-        # DIFFICULTY SCALING: Harder enemies on deeper levels
         self.hp = 3 + (level * 2) 
         self.damage = 10 + (level * 2)
 
@@ -128,7 +148,7 @@ class Enemy:
         dy = target_rect.y - self.rect.y
         dist = math.hypot(dx, dy)
 
-        if 0 < dist < 400: # Only chase if player is close (Optimization)
+        if 0 < dist < 400: 
             move_x = (dx / dist) * self.speed
             move_y = (dy / dist) * self.speed
             
@@ -173,7 +193,7 @@ class Player:
         if self.invincibility_timer == 0:
             self.hp -= amount
             self.invincibility_timer = 60
-            screenshake_trigger(10) # TRIGGER SHAKE!
+            screenshake_trigger(10) 
             if self.hp < 0: self.hp = 0
 
     def heal(self, amount):
@@ -192,9 +212,8 @@ class Player:
 
             for enemy in enemies[:]:
                 if attack_rect.colliderect(enemy.rect):
-                    enemy.hp -= 3 # Stronger melee
-                    screenshake_trigger(2) # Tiny shake on hit
-                    # Spawn blood
+                    enemy.hp -= 3 
+                    screenshake_trigger(2) 
                     for _ in range(5):
                         particles.append(Particle(enemy.rect.centerx, enemy.rect.centery))
 
@@ -204,7 +223,7 @@ class Player:
             proj = Projectile(self.rect.centerx, self.rect.centery, self.facing[0], self.facing[1])
             projectiles.append(proj)
 
-# --- 4. GAME FUNCTIONS ---
+# --- 5. GAME FUNCTIONS ---
 
 def check_collision(rect, map_data, width, height):
     left = max(0, rect.left // TILE_SIZE)
@@ -214,12 +233,11 @@ def check_collision(rect, map_data, width, height):
 
     for y in range(top, bottom):
         for x in range(left, right):
-            if map_data[y][x] == dungeon_gen.WALL:
+            if map_data[y][x] == WALL:
                 if rect.colliderect(pygame.Rect(x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE)):
                     return True
     return False
 
-# Global Screenshake Variable
 shake_intensity = 0
 
 def screenshake_trigger(amount):
@@ -236,10 +254,9 @@ def apply_screenshake():
     return 0, 0
 
 def generate_level(level_num, player_obj=None):
-    game_map = dungeon_gen.generate_dungeon()
+    game_map = generate_dungeon()
     w, h = len(game_map[0]), len(game_map)
     
-    # 1. Spawn Player
     start_x, start_y = w // 2, h // 2
     if player_obj:
         player_obj.rect.topleft = (start_x * TILE_SIZE, start_y * TILE_SIZE)
@@ -247,45 +264,37 @@ def generate_level(level_num, player_obj=None):
     else:
         player_obj = Player(start_x * TILE_SIZE, start_y * TILE_SIZE)
 
-    # 2. Spawn Enemies (More enemies on higher levels)
     enemies = []
     enemy_count = 5 + (level_num * 2)
     for _ in range(enemy_count):
         while True:
             ex, ey = random.randint(1, w-2), random.randint(1, h-2)
-            if game_map[ey][ex] == dungeon_gen.FLOOR:
-                # Ensure enemy doesn't spawn ON the player
+            if game_map[ey][ex] == FLOOR:
                 if abs(ex - start_x) > 5 or abs(ey - start_y) > 5:
                     enemies.append(Enemy(ex * TILE_SIZE, ey * TILE_SIZE, level_num))
                     break
     
-    # 3. Spawn Stairs (Far from player)
     stairs = None
     while True:
         sx, sy = random.randint(1, w-2), random.randint(1, h-2)
-        if game_map[sy][sx] == dungeon_gen.FLOOR:
-             if abs(sx - start_x) > 10 or abs(sy - start_y) > 10: # Ensure distance
+        if game_map[sy][sx] == FLOOR:
+             if abs(sx - start_x) > 10 or abs(sy - start_y) > 10: 
                 stairs = Stairs(sx * TILE_SIZE, sy * TILE_SIZE)
                 break
 
-    return game_map, w, h, player_obj, enemies, stairs, [], [], [] # items, projectiles, particles
+    return game_map, w, h, player_obj, enemies, stairs, [], [], [] 
 
-# --- 5. SETUP LIGHTING SURFACE ---
-# We create a "Darkness" layer with a transparent hole
+# --- 6. LIGHTING ---
 light_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
 light_surface.fill(BLACK)
-# Create a transparent circle (The Torch)
-torch_radius = 150 # How far you can see
-pygame.draw.circle(light_surface, (20, 20, 20), (SCREEN_WIDTH//2, SCREEN_HEIGHT//2), torch_radius)
-# Use special blend mode to make the circle transparent
+pygame.draw.circle(light_surface, (20, 20, 20), (SCREEN_WIDTH//2, SCREEN_HEIGHT//2), 150)
 light_surface.set_colorkey((20, 20, 20))
 
-# --- 6. MAIN LOOP ---
+# --- 7. MAIN LOOP ---
 game_map, MAP_W, MAP_H, player, enemies, stairs, items, projectiles, particles = generate_level(1)
 game_active = True
 
 while True:
-    # A. Input
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             pygame.quit(); sys.exit()
@@ -295,7 +304,7 @@ while True:
                 if event.key == pygame.K_SPACE: player.attack_sword(enemies, particles)
                 if event.key == pygame.K_z: player.attack_fireball(projectiles)
             else:
-                if event.key == pygame.K_r: # Restart
+                if event.key == pygame.K_r: 
                     game_map, MAP_W, MAP_H, player, enemies, stairs, items, projectiles, particles = generate_level(1)
                     game_active = True
 
@@ -309,59 +318,48 @@ while True:
         
         player.move(dx, dy, game_map, MAP_W, MAP_H)
 
-        # Update Projectiles
         for p in projectiles[:]:
             p.update(game_map, MAP_W, MAP_H)
             if p.life <= 0: projectiles.remove(p); continue
             for enemy in enemies[:]:
                 if p.rect.colliderect(enemy.rect):
                     enemy.hp -= 2
-                    # Spawn blood
                     for _ in range(3): particles.append(Particle(enemy.rect.centerx, enemy.rect.centery))
                     if p in projectiles: projectiles.remove(p)
                     break
         
-        # Update Enemies
         for enemy in enemies[:]:
             enemy.update(player.rect, game_map, MAP_W, MAP_H)
             if player.rect.colliderect(enemy.rect):
                 player.take_damage(enemy.damage)
             
             if enemy.hp <= 0:
-                # Chance to drop loot
-                if random.random() < 0.3: # 30% chance
+                if random.random() < 0.3: 
                     items.append(Item(enemy.rect.x, enemy.rect.y))
                 enemies.remove(enemy)
 
-        # Update Items
         for item in items[:]:
             item.update()
             if player.rect.colliderect(item.rect):
                 player.heal(25)
                 items.remove(item)
 
-        # Update Particles
         for p in particles[:]:
             p.update()
             if p.life <= 0: particles.remove(p)
 
-        # Check Stairs
         if player.rect.colliderect(stairs.rect):
-            # NEXT LEVEL!
             game_map, MAP_W, MAP_H, player, enemies, stairs, items, projectiles, particles = generate_level(player.level + 1, player)
 
         if player.hp <= 0:
             game_active = False
 
-    # B. Drawing
     screen.fill(BLACK)
     
-    # Calculate Camera
     shake_x, shake_y = apply_screenshake()
     cam_x = player.rect.x - (SCREEN_WIDTH // 2) + shake_x
     cam_y = player.rect.y - (SCREEN_HEIGHT // 2) + shake_y
 
-    # Draw Map (Visible Area Only)
     start_col = max(0, cam_x // TILE_SIZE)
     end_col = min(MAP_W, (cam_x + SCREEN_WIDTH) // TILE_SIZE + 1)
     start_row = max(0, cam_y // TILE_SIZE)
@@ -371,50 +369,39 @@ while True:
         for col in range(start_col, end_col):
             tile = game_map[row][col]
             draw_x, draw_y = (col * TILE_SIZE) - cam_x, (row * TILE_SIZE) - cam_y
-            if tile == dungeon_gen.WALL: screen.blit(assets["wall"], (draw_x, draw_y))
+            if tile == WALL: screen.blit(assets["wall"], (draw_x, draw_y))
             else: screen.blit(assets["floor"], (draw_x, draw_y))
 
-    # Draw Entities
     screen.blit(stairs.image, (stairs.rect.x - cam_x, stairs.rect.y - cam_y))
     for item in items: screen.blit(item.image, (item.rect.x - cam_x, item.rect.y - cam_y))
     for enemy in enemies: screen.blit(enemy.image, (enemy.rect.x - cam_x, enemy.rect.y - cam_y))
     for p in projectiles: screen.blit(p.image, (p.rect.x - cam_x, p.rect.y - cam_y))
     
-    # Draw Player
     if not (player.invincibility_timer > 0 and (player.invincibility_timer // 5) % 2 == 0):
         screen.blit(player.image, (player.rect.x - cam_x, player.rect.y - cam_y))
 
-    # Draw Particles
     for p in particles:
         pygame.draw.rect(screen, PARTICLE_COLOR, (p.x - cam_x, p.y - cam_y, p.size, p.size))
 
-    # Draw Sword Slash
     if player.is_attacking:
         slash_x = (player.rect.x - cam_x) + (player.facing[0] * TILE_SIZE)
         slash_y = (player.rect.y - cam_y) + (player.facing[1] * TILE_SIZE)
         pygame.draw.rect(screen, SWORD_COLOR, (slash_x, slash_y, TILE_SIZE, TILE_SIZE))
 
-    # --- DRAW LIGHTING (FOG OF WAR) ---
-    # We blit the light surface ON TOP of the game world
     screen.blit(light_surface, (0, 0))
 
-    # --- UI ---
     if game_active:
-        # HP Bar
         pygame.draw.rect(screen, HP_BAR_COLOR, (20, 20, 200, 25))
         pygame.draw.rect(screen, HP_BAR_FILL, (20, 20, (player.hp/player.max_hp)*200, 25))
-        pygame.draw.rect(screen, (255,255,255), (20, 20, 200, 25), 2) # Border
+        pygame.draw.rect(screen, (255,255,255), (20, 20, 200, 25), 2) 
         
-        # Level Text
         lvl_text = font.render(f"Dungeon Level: {player.level}", True, STAIRS_COLOR)
         screen.blit(lvl_text, (20, 55))
         
-        # Instruction
         if player.hp < 30:
             warn = font.render("Low Health! Find potions!", True, (255, 0, 0))
             screen.blit(warn, (20, 80))
     else:
-        # Game Over
         text = big_font.render("YOU DIED", True, (200, 0, 0))
         text_rect = text.get_rect(center=(SCREEN_WIDTH/2, SCREEN_HEIGHT/2 - 50))
         screen.blit(text, text_rect)
